@@ -136,7 +136,7 @@ export default function ModelViewer({
 
     // Load GLB Model
     const loader = new GLTFLoader();
-    const modelPath = "/scene.glb";
+    const modelPath = "/vf3.glb";
 
     loader.load(
       modelPath,

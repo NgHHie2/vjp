@@ -28,7 +28,7 @@ export default function ViewportOverlay({
             <div className="text-left bg-slate-800/50 border border-slate-700 rounded p-4 text-xs text-slate-300 space-y-2">
               <p className="text-cyan-400 font-mono">Setup Instructions:</p>
               <p>1. Place your .glb file in the /public folder</p>
-              <p>2. Rename it to scene.glb</p>
+              <p>2. Rename it to vf3.glb</p>
               <p>3. OR update modelPath in ModelViewer.jsx</p>
               <p className="text-yellow-400 mt-2">
                 💡 Check browser console for details
