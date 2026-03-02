@@ -14,7 +14,26 @@ export default function ControlPanel({
   objectsCount,
   isLoading,
   loadError,
+
+  // 🔥 thêm 3 props này
+  selectedColor,
+  setSelectedColor,
+  selectedObjectRef,
 }) {
+  const handleColorChange = (e) => {
+    const newColor = e.target.value;
+    setSelectedColor(newColor);
+
+    if (selectedObjectRef?.current) {
+      selectedObjectRef.current.traverse((child) => {
+        if (child.isMesh) {
+          child.material = child.material.clone(); // tránh ảnh hưởng object khác
+          child.material.color.set(newColor);
+        }
+      });
+    }
+  };
+
   return (
     <aside className="w-80 bg-slate-900/90 backdrop-blur-md border-l border-cyan-500/20 overflow-y-auto">
       <div className="p-6 space-y-6">
@@ -38,6 +57,24 @@ export default function ControlPanel({
             />
           </div>
         </div>
+
+        {/* 🔥 Selected Object Color */}
+        {selectedObjectName && (
+          <div className="space-y-3">
+            <label className="block text-purple-400 font-mono text-sm uppercase tracking-wider">
+              Selected Object Color
+            </label>
+            <input
+              type="color"
+              value={selectedColor}
+              onChange={handleColorChange}
+              className="w-full h-12 rounded border-2 border-purple-500/30 cursor-pointer"
+            />
+            <div className="text-xs text-slate-400 font-mono">
+              Editing: {selectedObjectName}
+            </div>
+          </div>
+        )}
 
         {/* Auto Rotate */}
         <div className="space-y-3">
@@ -70,7 +107,9 @@ export default function ControlPanel({
                 max="2"
                 step="0.1"
                 value={animationSpeed}
-                onChange={(e) => setAnimationSpeed(parseFloat(e.target.value))}
+                onChange={(e) =>
+                  setAnimationSpeed(parseFloat(e.target.value))
+                }
                 className="w-full accent-cyan-500"
               />
             </div>
@@ -82,32 +121,19 @@ export default function ControlPanel({
           <label className="block text-cyan-400 font-mono text-sm uppercase tracking-wider">
             Add Decorative Objects
           </label>
+
           <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => addObject("cube")}
-              className="px-4 py-3 bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 border border-cyan-500/40 text-cyan-300 rounded hover:from-cyan-500/30 hover:to-cyan-600/30 transition-all font-mono text-sm"
-            >
-              CUBE
-            </button>
-            <button
-              onClick={() => addObject("sphere")}
-              className="px-4 py-3 bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/40 text-purple-300 rounded hover:from-purple-500/30 hover:to-purple-600/30 transition-all font-mono text-sm"
-            >
-              SPHERE
-            </button>
-            <button
-              onClick={() => addObject("torus")}
-              className="px-4 py-3 bg-gradient-to-br from-pink-500/20 to-pink-600/20 border border-pink-500/40 text-pink-300 rounded hover:from-pink-500/30 hover:to-pink-600/30 transition-all font-mono text-sm"
-            >
-              TORUS
-            </button>
-            <button
-              onClick={() => addObject("cone")}
-              className="px-4 py-3 bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/40 text-orange-300 rounded hover:from-orange-500/30 hover:to-orange-600/30 transition-all font-mono text-sm"
-            >
-              CONE
-            </button>
+            {["cube", "sphere", "torus", "cone"].map((type) => (
+              <button
+                key={type}
+                onClick={() => addObject(type)}
+                className="px-4 py-3 bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 border border-cyan-500/40 text-cyan-300 rounded hover:from-cyan-500/30 hover:to-cyan-600/30 transition-all font-mono text-sm"
+              >
+                {type.toUpperCase()}
+              </button>
+            ))}
           </div>
+
           <button
             onClick={clearObjects}
             className="w-full px-4 py-3 bg-red-500/10 border border-red-500/30 text-red-400 rounded hover:bg-red-500/20 transition-all font-mono text-sm"
@@ -129,8 +155,8 @@ export default function ControlPanel({
                 isLoading
                   ? "text-yellow-400"
                   : loadError
-                    ? "text-red-400"
-                    : "text-green-400"
+                  ? "text-red-400"
+                  : "text-green-400"
               }`}
             >
               {isLoading ? "LOADING..." : loadError ? "ERROR" : "YES"}

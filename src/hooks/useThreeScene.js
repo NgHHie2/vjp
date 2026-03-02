@@ -70,58 +70,54 @@ export function useThreeScene() {
 
   // Handle object click for selection
   const handleObjectClick = useCallback(
-    (e, mountRef) => {
-      if (!mountRef.current || !cameraRef.current || !sceneRef.current) return;
+  (e, mountRef) => {
+    if (!mountRef.current || !cameraRef.current || !sceneRef.current) return;
 
-      const rect = mountRef.current.getBoundingClientRect();
-      const mouse = new THREE.Vector2(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        -((e.clientY - rect.top) / rect.height) * 2 + 1,
-      );
+    const rect = mountRef.current.getBoundingClientRect();
+    const mouse = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1
+    );
 
-      // Raycasting to detect object click
-      raycasterRef.current.setFromCamera(mouse, cameraRef.current);
+    raycasterRef.current.setFromCamera(mouse, cameraRef.current);
 
-      // Get all interactive objects
-      const interactiveObjects = [];
+    const interactiveObjects = [];
 
-      if (mainModelRef.current) {
-        mainModelRef.current.traverse((child) => {
-          if (child.isMesh) {
-            interactiveObjects.push(child);
-          }
-        });
-      }
-
-      objectsRef.current.forEach((obj) => {
-        interactiveObjects.push(obj);
+    if (mainModelRef.current) {
+      mainModelRef.current.traverse((child) => {
+        if (child.isMesh) interactiveObjects.push(child);
       });
+    }
 
-      const intersects = raycasterRef.current.intersectObjects(
-        interactiveObjects,
-        false,
-      );
+    objectsRef.current.forEach((obj) => {
+      interactiveObjects.push(obj);
+    });
 
-      if (intersects.length > 0) {
-        const clickedObject = intersects[0].object;
+    const intersects = raycasterRef.current.intersectObjects(
+      interactiveObjects,
+      false
+    );
 
-        // Determine which parent object was clicked
-        let targetObject = null;
-        if (clickedObject.userData.isMainModel) {
-          targetObject = mainModelRef.current;
-        } else if (objectsRef.current.includes(clickedObject)) {
-          targetObject = clickedObject;
-        }
+    if (intersects.length > 0) {
+      const clickedMesh = intersects[0].object;
 
-        if (targetObject) {
-          selectObject(targetObject);
-        }
-      } else {
-        deselectObject();
+      let targetObject = null;
+
+      if (clickedMesh.userData.isMainModel) {
+        targetObject = mainModelRef.current;
+      } else if (objectsRef.current.includes(clickedMesh)) {
+        targetObject = clickedMesh;
       }
-    },
-    [selectObject, deselectObject],
-  );
+
+      if (targetObject) {
+        selectObject(targetObject);
+      }
+    } else {
+      deselectObject();
+    }
+  },
+  [selectObject, deselectObject]
+);
 
   // Add decorative object
   const addObject = useCallback((type) => {

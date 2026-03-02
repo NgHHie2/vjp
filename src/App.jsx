@@ -10,6 +10,7 @@ function App() {
   const [backgroundColor, setBackgroundColor] = useState("#2a2a2a");
   const [autoRotate, setAutoRotate] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(0.5);
+  const [selectedColor, setSelectedColor] = useState("#ff0000");
 
   // Three.js scene management
   const {
@@ -85,6 +86,9 @@ function App() {
 
         {/* Control Panel */}
         <ControlPanel
+           selectedColor={selectedColor}
+            setSelectedColor={setSelectedColor}
+            selectedObjectRef={selectedObjectRef}
           selectedObjectName={selectedObjectName}
           backgroundColor={backgroundColor}
           setBackgroundColor={setBackgroundColor}

@@ -2,12 +2,12 @@ import React, { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { EXRLoader } from "three/examples/jsm/loaders/EXRLoader";
 import ViewportOverlay from "./ViewportOverlay";
 
 export default function ModelViewer({
-  backgroundColor,
-  autoRotate,
-  animationSpeed,
+  autoRotate = false,
+  animationSpeed = 1,
   selectedObjectName,
   isLoading,
   loadError,
@@ -15,262 +15,259 @@ export default function ModelViewer({
   cameraRef,
   rendererRef,
   mainModelRef,
-  objectsRef,
-  selectedObjectRef,
   setIsLoading,
   setLoadError,
-  controlsRef,
   initControls,
-  updateControls,
   handleObjectClick,
-  updateOutline,
 }) {
   const mountRef = useRef(null);
+  const meshesRef = useRef([]); // Lưu meshes của xe để đổi màu
 
-  // Initialize Three.js scene
   useEffect(() => {
-    if (!mountRef.current) return;
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
 
-    // Scene setup
+    // ==========================================
+    // 1. SCENE, CAMERA & RENDERER (Cấu hình cao)
+    // ==========================================
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x0a0e1a, 10, 50);
+    // Thêm sương mù nhẹ để tạo chiều sâu cho garage
+    scene.fog = new THREE.FogExp2(0x1a1a1a, 0.05); 
     sceneRef.current = scene;
 
-    // Camera setup
     const camera = new THREE.PerspectiveCamera(
-      75,
-      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      40, // Góc nhìn hẹp giúp xe trông sang trọng hơn
+      currentMount.clientWidth / currentMount.clientHeight,
       0.1,
-      1000,
+      1000
     );
-    camera.position.set(0, 2, 5);
+    camera.position.set(4.5, 2, 6); // Góc nhìn xéo từ trước
     cameraRef.current = camera;
 
-    // Renderer setup
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: "high-performance",
-    });
-    renderer.setSize(
-      mountRef.current.clientWidth,
-      mountRef.current.clientHeight,
-    );
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    
+    // Cấu hình xử lý màu sắc và bóng đổ CHUẨN
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1; // Chỉnh độ sáng tổng thể
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Bóng đổ mềm
+
     rendererRef.current = renderer;
-    mountRef.current.appendChild(renderer.domElement);
+    currentMount.appendChild(renderer.domElement);
 
-    // Initialize OrbitControls
-    const controls = initControls(camera, renderer.domElement, OrbitControls);
+    // ==========================================
+    // 2. TẠO MÔ HÌNH STUDIO GARAGE (Bằng Code)
+    // ==========================================
+    const textureLoader = new THREE.TextureLoader();
 
-    // Lights
-    // ============================================
-    // LIGHTING SETUP - SÁNG ĐỀU MỌI HƯỚNG
-    // ============================================
+    // A. Sàn Bê Tông (Concrete Floor)
+    // Bạn nên thay bằng link texture thật để đẹp hơn, tạm thời dùng màu trơn có độ bóng
+    const floorGeometry = new THREE.PlaneGeometry(30, 30);
+    const floorMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x333333, // Màu xám bê tông tối
+      metalness: 0.2,
+      roughness: 0.6, // Hơi nhám
+    });
+    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+    floor.rotation.x = -Math.PI / 2; // Nằm ngang
+    floor.receiveShadow = true; // Nhận bóng đổ từ xe
+    scene.add(floor);
 
-    // 1. AMBIENT LIGHT - Ánh sáng tổng thể
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2); // Tăng mạnh!
+    // B. Tường Garage (L shaped wall)
+    const wallMaterial = new THREE.MeshStandardMaterial({ 
+      color: 0x1a1a1a, // Tường tối để nổi bật xe
+      roughness: 0.9,
+    });
+    
+    // Tường sau
+    const backWall = new THREE.Mesh(new THREE.PlaneGeometry(30, 10), wallMaterial);
+    backWall.position.set(0, 5, -5);
+    backWall.receiveShadow = true;
+    scene.add(backWall);
+
+    // Tường bên
+    const sideWall = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), wallMaterial);
+    sideWall.position.set(-10, 5, 0);
+    sideWall.rotation.y = Math.PI / 2;
+    sideWall.receiveShadow = true;
+    scene.add(sideWall);
+
+    // ==========================================
+    // 3. ÁNH SÁNG STUDIO GARAGE (Garage Lighting)
+    // ==========================================
+    
+    // A. Ánh sáng môi trường (nhẹ)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.2);
     scene.add(ambientLight);
 
-    // 2. DIRECTIONAL LIGHTS - 4 hướng
-    // Từ trên
-    const topLight = new THREE.DirectionalLight(0xffffff, 0.6);
-    topLight.position.set(0, 10, 0);
-    topLight.castShadow = true;
-    topLight.shadow.camera.near = 0.1;
-    topLight.shadow.camera.far = 50;
-    topLight.shadow.mapSize.width = 2048;
-    topLight.shadow.mapSize.height = 2048;
-    scene.add(topLight);
+    // B. Đèn dải LED trần (Ceiling Light Strips) - Tạo vệt phản chiếu đẹp trên xe
+    // Đèn chính 1
+    const ceilLight1 = new THREE.RectAreaLight(0xffffff, 4, 1, 10);
+    ceilLight1.position.set(2, 5, 2);
+    ceilLight1.lookAt(0, 0, 0);
+    scene.add(ceilLight1);
 
-    // Từ trước
-    const frontLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    frontLight.position.set(0, 3, 10);
-    scene.add(frontLight);
+    // Đèn chính 2
+    const ceilLight2 = new THREE.RectAreaLight(0xffffff, 4, 1, 10);
+    ceilLight2.position.set(-2, 5, 2);
+    ceilLight2.lookAt(0, 0, 0);
+    scene.add(ceilLight2);
 
-    // Từ sau
-    const backLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    backLight.position.set(0, 3, -10);
-    scene.add(backLight);
+    // C. Đèn chiếu điểm (Key Light) để tạo bóng đổ đổ
+    const keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+    keyLight.position.set(5, 8, 5);
+    keyLight.castShadow = true;
+    // Cấu hình bóng đổ sắc nét
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 0.5;
+    keyLight.shadow.camera.far = 20;
+    scene.add(keyLight);
 
-    // Từ trái
-    const leftLight = new THREE.DirectionalLight(0xffffff, 0.4);
-    leftLight.position.set(-10, 3, 0);
-    scene.add(leftLight);
-
-    // Từ phải
-    const rightLight = new THREE.DirectionalLight(0xffffff, 0.4);
-    rightLight.position.set(10, 3, 0);
-    scene.add(rightLight);
-
-    // 3. TẮT HOẶC GIẢM POINT LIGHTS (nếu không muốn màu cyan/magenta)
-    // Comment 2 dòng này nếu muốn tắt:
-    const pointLight1 = new THREE.PointLight(0x00ffff, 0.2, 100);
-    pointLight1.position.set(-5, 3, -5);
-    scene.add(pointLight1);
-
-    const pointLight2 = new THREE.PointLight(0xff00ff, 0.1, 100);
-    pointLight2.position.set(5, 3, 5);
-    scene.add(pointLight2);
-
-    // Grid
-    const gridHelper = new THREE.GridHelper(20, 20, 0x00ffff, 0x1a2332);
-    gridHelper.material.opacity = 0.3;
-    gridHelper.material.transparent = true;
-    scene.add(gridHelper);
-
-    // Ground plane
-    const planeGeometry = new THREE.PlaneGeometry(20, 20);
-    const planeMaterial = new THREE.MeshStandardMaterial({
-      color: 0x1a2332,
-      metalness: 0.3,
-      roughness: 0.8,
+    // D. Load HDR Environment (để lấy phản chiếu kim loại mượt)
+    new EXRLoader().load("/ferndale_studio_12_4k.exr", (texture) => {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      scene.environment = texture; // Chỉ dùng làm môi trường phản chiếu, không làm nền
     });
-    const plane = new THREE.Mesh(planeGeometry, planeMaterial);
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.y = -2;
-    plane.receiveShadow = true;
-    scene.add(plane);
 
-    // Load GLB Model
+    // ==========================================
+    // 4. CONTROLS
+    // ==========================================
+    const controls = initControls(camera, renderer.domElement, OrbitControls);
+    controls.enableDamping = true;
+    controls.minDistance = 3; // Không cho zoom quá gần
+    controls.maxDistance = 15; // Không cho zoom quá xa
+    controls.maxPolarAngle = Math.PI / 2 - 0.05; // Không cho nhìn dưới sàn
+
+    // ==========================================
+    // 5. LOAD MODEL (VF3) & RANDOM COLOR
+    // ==========================================
     const loader = new GLTFLoader();
-    const modelPath = "/vf3.glb";
-
     loader.load(
-      modelPath,
+      "/vf3_hehe.glb",
       (gltf) => {
         const model = gltf.scene;
 
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-            child.userData.isMainModel = true;
-          }
-        });
-
-        // Center and scale the model
+        // Auto center & scale
         const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
+        const scale = 2.8 / Math.max(size.x, size.y, size.z); // Scale xe lớn hơn một chút
 
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const scale = 2 / maxDim;
-        model.scale.multiplyScalar(scale);
+        model.scale.setScalar(scale);
+        // Đặt xe nằm ngay trên mặt sàn (y=0)
+        model.position.sub(center.multiplyScalar(scale));
+        model.position.y = 0; 
 
-        model.position.x = -center.x * scale;
-        model.position.y = -center.y * scale;
-        model.position.z = -center.z * scale;
+        // Xử lý vật liệu xe
+        model.traverse((child) => {
+          if (child.isMesh) {
+            child.castShadow = true; // Đổ bóng xuống sàn
+            child.receiveShadow = true; // Nhận bóng từ các bộ phận khác
+            
+            // Tăng độ bóng kim loại cho xe VF3 trông "thật" hơn dưới đèn garage
+            if (child.material.name.includes("Paint") || child.material.name.includes("Car")) {
+                child.material.roughness = 0.1; 
+                child.material.metalness = 0.8;
+            }
+
+            // --- Logic Đổi Màu Random (HSL mượt) ---
+            // Chỉ đổi màu các phần sơn xe (Car Paint)
+            // LƯU Ý: Bạn cần kiểm tra tên material thật trong file .glb của bạn
+            if (child.material.name.includes("Paint")) { 
+                child.material = child.material.clone();
+                child.userData.hue = Math.random(); 
+                meshesRef.current.push(child);
+            }
+          }
+        });
 
         scene.add(model);
         mainModelRef.current = model;
         setIsLoading(false);
-        console.log("✅ Model loaded successfully!");
       },
-      (progress) => {
-        const percent = ((progress.loaded / progress.total) * 100).toFixed(2);
-        console.log("📦 Loading progress:", percent + "%");
-      },
+      undefined,
       (error) => {
-        console.error("❌ Error loading model:", error);
-        setLoadError(
-          `Failed to load "${modelPath}". Make sure the file exists in the public folder.`,
-        );
+        console.error(error);
+        setLoadError("Failed to load car model");
         setIsLoading(false);
-      },
+      }
     );
 
-    // Animation loop
-    let animationFrameId;
+    // ==========================================
+    // 6. ANIMATION LOOP
+    // ==========================================
+    let frameId;
     const animate = () => {
-      animationFrameId = requestAnimationFrame(animate);
+      frameId = requestAnimationFrame(animate);
 
-      // Update OrbitControls
-      updateControls();
+      controls.update();
 
-      // Auto rotate
-      if (autoRotate) {
-        if (selectedObjectRef.current) {
-          selectedObjectRef.current.rotation.y += 0.01 * animationSpeed;
-        } else if (mainModelRef.current) {
-          mainModelRef.current.rotation.y += 0.01 * animationSpeed;
-        }
+      if (autoRotate && mainModelRef.current) {
+        mainModelRef.current.rotation.y += 0.003 * animationSpeed;
       }
 
-      // Animate decorative objects
-      objectsRef.current.forEach((obj, index) => {
-        if (obj !== selectedObjectRef.current) {
-          obj.rotation.x += 0.005 * (index + 1);
-          obj.rotation.y += 0.01 * (index + 1);
-        }
+      // --- RANDOM COLOR LOGIC ---
+      meshesRef.current.forEach((mesh) => {
+        mesh.userData.hue += 0.02; // Tốc độ đổi màu chậm lại cho sang
+        if (mesh.userData.hue > 1) mesh.userData.hue = 0;
+        // Màu rực rỡ (S=0.9), độ sáng vừa phải (L=0.5)
+        mesh.material.color.setHSL(mesh.userData.hue, 0.9, 0.5);
       });
-
-      // Update outline
-      updateOutline();
 
       renderer.render(scene, camera);
     };
+
     animate();
 
-    // Handle window resize
+    // ==========================================
+    // 7. CLEANUP & RESIZE
+    // ==========================================
     const handleResize = () => {
-      if (!mountRef.current) return;
-      const width = mountRef.current.clientWidth;
-      const height = mountRef.current.clientHeight;
-      camera.aspect = width / height;
+      if (!currentMount) return;
+      camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(width, height);
+      renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     };
+
     window.addEventListener("resize", handleResize);
 
-    // Cleanup
     return () => {
       window.removeEventListener("resize", handleResize);
-      cancelAnimationFrame(animationFrameId);
-      if (mountRef.current && renderer.domElement) {
-        mountRef.current.removeChild(renderer.domElement);
-      }
-      controls.dispose();
+      cancelAnimationFrame(frameId);
+      
       renderer.dispose();
-      scene.traverse((object) => {
-        if (object.geometry) object.geometry.dispose();
-        if (object.material) {
-          if (Array.isArray(object.material)) {
-            object.material.forEach((mat) => mat.dispose());
-          } else {
-            object.material.dispose();
-          }
-        }
+      // Dispose sàn và tường
+      floorGeometry.dispose();
+      floorMaterial.dispose();
+      wallMaterial.dispose();
+      
+      meshesRef.current.forEach(m => {
+        m.geometry.dispose();
+        m.material.dispose();
       });
+
+      if (currentMount && renderer.domElement) {
+        if (currentMount.contains(renderer.domElement)) {
+          currentMount.removeChild(renderer.domElement);
+        }
+      }
     };
   }, []);
 
-  // Update background color
-  useEffect(() => {
-    if (sceneRef.current) {
-      sceneRef.current.background = new THREE.Color(backgroundColor);
-      sceneRef.current.fog.color = new THREE.Color(backgroundColor);
-    }
-  }, [backgroundColor]);
-
-  // Handle click for object selection
-  const handleClick = (e) => {
-    // Only select on left click (button 0)
-    if (e.button === 0) {
-      handleObjectClick(e, mountRef);
-    }
-  };
+  // Removed backgroundColor update effect as we use a 3D background
 
   return (
-    <div className="flex-1 relative">
+    <div className="flex-1 relative w-full h-full bg-black"> {/* Nền đen phía sau */}
       <div
         ref={mountRef}
-        className="w-full h-full cursor-pointer"
-        onMouseDown={handleClick}
+        className="w-full h-full outline-none"
+        // onClick thay vì onMouseDown để tránh conflict với OrbitControls
+        onClick={(e) => handleObjectClick(e, mountRef)}
       />
-
       <ViewportOverlay
         selectedObjectName={selectedObjectName}
         isLoading={isLoading}
